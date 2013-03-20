@@ -6,7 +6,7 @@ from django.conf.urls import patterns, include, url
 
 urlpatterns = patterns('',
     # Examples:
-     url(r'^$', 'daq328p.views.home', name='home'),
+    url(r'^$', 'daq328p.views.home', name='home'),
 #     url(r'^query/(?P<cmd>[a-zA-Z0-9]+)$', 'daq328p.views.query', name='query'),
     url(r'^query/(?P<cmd>.+)$', 'daq328p.views.query', name='query'),
     
