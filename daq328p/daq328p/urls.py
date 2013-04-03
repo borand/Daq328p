@@ -8,7 +8,10 @@ urlpatterns = patterns('',
     # Examples:
     url(r'^$', 'daq328p.views.home', name='home'),
 #     url(r'^query/(?P<cmd>[a-zA-Z0-9]+)$', 'daq328p.views.query', name='query'),
-    url(r'^query/(?P<cmd>.+)$', 'daq328p.views.query', name='query'),
+    url(r'^query/(?P<cmd>.*)$', 'daq328p.views.query', name='query'),
+    url(r'^query', 'daq328p.views.query', name='query'),
+    
+    url(r'^cmd', 'daq328p.views.cmd', name='cmd'),
     
     # url(r'^daq328p/', include('daq328p.foo.urls')),
 

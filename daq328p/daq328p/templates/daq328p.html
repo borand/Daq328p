@@ -1,80 +1,68 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<title>{{page_title}}}</title>
+	<head>
+		<title>{{page_title}}}</title>
 
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="http://code.jquery.com/mobile/1.3.0/jquery.mobile-1.3.0.min.css" />
+		<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+		<script src="http://code.jquery.com/mobile/1.3.0/jquery.mobile-1.3.0.min.js"></script>
+		<script  type="text/javascript">
+			{% include "jqm.js" %}
+		</script>
+	</head>
+	<body>
 
-	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.3.0/jquery.mobile-1.3.0.min.css" />
-	<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
-	<script src="http://code.jquery.com/mobile/1.3.0/jquery.mobile-1.3.0.min.js"></script>
-	<script  type="text/javascript">
-		$(document).ready(function() {
-		console.log('Document ready');
-		$('#json_res').attr('style', 'background-color:White; font-size:14px; height: 40em;');
-	
-		///////////////////////////////////////////////////////////////////////
-		$('#json_cmd').keydown(function(e) {
-			if (e.keyCode == 13) {					
-				var cmd = $("#json_cmd").val();
-				$(this).val("");					
-						// $("#json_res").text("");					
-						
-						if (cmd=="clc"){
-							console.log('Clear screen');
-							$("#json_res").text("");
-						}
-						else {
-							console.log('Sending command: ' + cmd);
-							$("#json_res").append("cmd>" + cmd + "\n");							
-							
-							$.getJSON('/query/'+ cmd, "", function(data) {
-								console.log(data);
-							 	$("#json_res").append("res>" + data + "\n");
-							 	var psconsole = $('#json_res');
-	    						psconsole.scrollTop(
-	        					psconsole[0].scrollHeight - psconsole.height()
-	    						);
-							 });
-							 
-							
-						}
-			}
-		});
-		///////////////////////////////////////////////////////////////////////
-		$("#console_clear").click(function() {
-			console.log('Pressed clear console button');
-			$("#json_res").text("");
-		});
-	
-	});
-	</script>
-</head>
-<body>
+		<div data-role="page" id="main_page">
 
-	<div data-role="page">
+			<div data-role="header">
+				<h1>{{page_title}}</h1>
+				<a href="#options" data-icon="gear" class="ui-btn-right">Options</a>
+			</div><!-- /header -->
 
-		<div data-role="header">
-			<h1>{{page_title}}</h1>
-		</div><!-- /header -->
+			<div data-role="content">
 
-		<div data-role="content">
-			<p></p>
-			<label for="textarea">Response</label>
-			<textarea cols="80" rows="15" name="textarea" id="json_res" data-role="textarea"></textarea>
+				<label for="select-choice-1" class="select">Select host</label>
+				<select name="select-choice-1" id="select-choice-1">
+					<option value="standard">localhost</option>
+					<option value="standard">192.168.1.150</option>
+				</select>
 
-			<label for="text-basic">Command</label>
-			<input type="text" name="text-basic" id="json_cmd" value="">
-			<p>
-			    <a data-role="button" data-inline="true" id="console_clear">Clear</a>			
-			</p>
+				<label for="textarea">Response</label>
+				<textarea cols="80" rows="15" name="textarea" id="json_res" data-role="textarea" type="etc."></textarea>				
 
-		</div><!-- /content -->
+ 				<label for="text-basic">Command</label>
+				<input type="text" name="text-basic" id="json_cmd" value="">
+				<p>
+					<a data-role="button" data-inline="true" id="console_clear">Clear</a>
+				</p>
+				<p id="cmd_status"></p>
 
-		<div data-role="footer">
-			<h4>Status</h4>
-		</div><!-- /footer -->
-	</div><!-- /page -->
+			</div><!-- /content -->
+			<p id="scratchpad"></p>
+			<div data-role="footer">
+				<h4>Status</h4>
+			</div><!-- /footer -->
+		</div><!-- /page -->
 
-</body>
-</html>f
+	<!-- ################################################ -->
+		<div data-role="page" id="options">
+			<div data-role="header" data-theme="b">
+				<a href="#main_page" data-role="button" data-direction="reverse" data-icon="back">Main</a>
+				<h1>Options</h1>
+			</div><!-- /header -->
+
+			<div data-role="content">
+				<h3>Control</h3>
+				<a data-role="button" data-icon="star" id="options_ping">Ping</a>
+				<a data-role="button" data-icon="star" id="options_threading">Start Thread</a>
+			</div><!-- /content -->
+
+			<div data-role="footer" data-theme="b">
+				<h4 id="sensordata_options_footer"></h4>
+			</div><!-- /footer -->
+		</div><!-- /page -->
+
+	</body>
+</html>
+f

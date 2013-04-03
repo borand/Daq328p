@@ -12,6 +12,7 @@ from warnings import *
 import time
 import re
 import simplejson as sjson
+import requests
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
@@ -19,6 +20,10 @@ FIVEBITS, SIXBITS, SEVENBITS, EIGHTBITS = (5,6,7,8)
 TIMEOUT = 3
 
 class DaqInterface(Thread):
+    read_all_data = False
+    submit_to = '192.168.1.111:8000'
+    submit = True
+    
     def __init__(self,
                  port = 8,           #Number of device, numbering starts at
                                         # zero.                 
@@ -119,9 +124,13 @@ class DaqInterface(Thread):
                 to = time.clock()                
                 done = 0
                 while time.clock() - to < TIMEOUT and not done:
-                    n = self.serial.inWaiting()
-                    if n > 0:
-                        serial_data += self.serial.read(n)
+                    if self.is_alive():
+                        if not self.read_q.empty():
+                            serial_data += self.read_q.get_nowait()                            
+                    else:                        
+                        n = self.serial.inWaiting()
+                        if n > 0:
+                            serial_data += self.serial.read(n)
                     if expected_text in serial_data:
                         done = 1
                 serial_error = 0
@@ -163,16 +172,19 @@ class DaqInterface(Thread):
         self.running.clear()
     
     def process_q(self):
-        if self.read_q.qsize() > 0:
+        final_data = ''
+        if self.read_q.qsize() > 0:            
             q_data = self.read_q.get(1,1)
             if 'json>' in q_data:
                 re_data = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
                 temp = re_data.findall(q_data)
-                final_data = sjson.loads(temp[0])
+                try:
+                    final_data = sjson.loads(temp[0])
+                except:
+                    final_data = "json loads error"
             else:
-                final_data = q_data
-        else:
-            final_data = ''
+                if self.read_all_data:
+                    final_data = q_data
         return final_data
 
     def run(self):
@@ -190,6 +202,22 @@ class DaqInterface(Thread):
                         if self.buffer[-2:] == '\r\n':
                             # Put the unpacked data onto the read queue                    
                             self.read_q.put(self.buffer)
+                            print self.buffer
+                            if self.submit:
+                                if 'json>' in self.buffer:
+                                     re_data = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
+                                     temp = re_data.findall(self.buffer)
+                                     try:
+                                         final_data = sjson.loads(temp[0])
+                                         res = requests.get('http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, final_data[0], final_data[1]))
+                                         if res.ok:
+                                             print res.content
+                                         else:
+                                             print res
+                                                  
+                                     except:
+                                         final_data = "json loads error"
+                            
                             # Clear the buffer
                             self.buffer = ''
                             #self.process_q()
@@ -202,7 +230,8 @@ class DaqInterface(Thread):
         print "Endof run() function"
 
 if __name__ == '__main__':
-    pass
+    D = DaqInterface('/dev/ttyUSB0');
+    print D.query('I',expected_text="cmd>")
     # from PyDaq.Sandbox.aserial import *    
 #    A = async_serial(13)    
 #    print A.query("adc", "</a>", "a", json=0)
