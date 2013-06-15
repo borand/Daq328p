@@ -1,8 +1,18 @@
-'''
-Created on Mar 20, 2012
+"""hardware.py - 
 
-@author: Andrzej
-'''
+Simple module for communicating with Daq328p firmware written for AVR328p.
+
+Usage:
+  hardware.py test [--dev=DEV]
+  hardware.py [--dev=DEV | --submit_to=SUBMIT_TO | --test]
+  hardware.py (-h | --help)
+
+Options:
+  -h, --help
+  --dev=DEV              [default: /dev/ttyS0]
+  --submit_to=SUBMIT_TO  [default: 192.168.1.150]
+
+"""
 
 import serial
 import struct
@@ -13,6 +23,7 @@ import time
 import re
 import simplejson as sjson
 import requests
+from docopt import docopt
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
@@ -230,8 +241,20 @@ class DaqInterface(Thread):
         print "Endof run() function"
 
 if __name__ == '__main__':
-    D = DaqInterface('/dev/ttyUSB0');
-    print D.query('I',expected_text="cmd>")
+    opt = docopt(__doc__)
+    
+    if opt['test']:
+        print "Test Mode"
+        D = DaqInterface(opt['--dev']);
+        resp = D.query('I',expected_text="cmd>")
+        if not resp[0]:
+            print resp[1]
+        else:
+            print "query command returned error code: ", resp[0]
+            print "Full response: ", resp
+    else:
+        D.submit_to = opt['--submit_to']
+
     # from PyDaq.Sandbox.aserial import *    
 #    A = async_serial(13)    
 #    print A.query("adc", "</a>", "a", json=0)

@@ -34,8 +34,7 @@ def query(request, **kwargs):
         msg = "Loaded at: %s errors in reading H" % time_stamp
     else:
         msg = str('query : ') + res[1]
-#    logger.info(res[1])
-    
+#    logger.info(res[1])    
 #    print simplejson.dumps(str(res[1]))
     return HttpResponse(simplejson.dumps(str(res[1])),mimetype='text/json')
 
