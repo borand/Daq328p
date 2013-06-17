@@ -16,82 +16,76 @@ Options:
 
 import serial
 import struct
-from threading import Thread,Event
-from Queue import Queue, Empty
-from warnings import *
 import time
 import re
 import simplejson as sjson
-import requests
+
+
+from threading import Thread,Event
+from Queue import Queue, Empty
+from warnings import *
+from datetime import datetime
+from logbook import Logger
 from docopt import docopt
+from requests import get
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
 FIVEBITS, SIXBITS, SEVENBITS, EIGHTBITS = (5,6,7,8)
 TIMEOUT = 3
 
+log = Logger('hardware')
+log.info("2013.06.16 23:17")
+
 class DaqInterface(Thread):
     read_all_data = False
-    submit_to = '192.168.1.111:8000'
-    submit = True
+    submit_to     = 'sensoredweb.heroku.com'
+    submit        = True
+    re_data       = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
+    json_q   = Queue()
+    read_q   = Queue()
     
     def __init__(self,
-                 port = 8,           #Number of device, numbering starts at
-                                        # zero.                 
-                 read_q = None,         #The queue on which to place the packets
-                                        # as they are read in. No argument implies
-                                        # that we need to initialise a new queue
-                 packet_timeout=1,      #Timeout waiting for packets to arrive.
-                                        # This is so we don't block permanently 
-                                        # while nothing ever arrives.
-                 baudrate=115200,       #baudrate
-                 bytesize=EIGHTBITS,    #number of databits
-                 parity=PARITY_NONE,    #enable parity checking
-                 stopbits=STOPBITS_ONE, #number of stopbits
-                 xonxoff=0,             #enable software flow control
-                 rtscts=0,              #enable RTS/CTS flow control
-                 writeTimeout=None,     #set a timeout for writes
-                 dsrdtr=None            #None: use rtscts setting, dsrdtr override if true or false
+                 port = 8,
+                 packet_timeout=2,
+                 baudrate=115200,       
+                 bytesize=EIGHTBITS,    
+                 parity=PARITY_NONE,    
+                 stopbits=STOPBITS_ONE, 
+                 xonxoff=0,             
+                 rtscts=0,              
+                 writeTimeout=None,     
+                 dsrdtr=None            
                  ):
 
-        '''Initialise the asynchronous serial object
+        '''
+        Initialise the asynchronous serial object
         '''
         
         Thread.__init__(self)
-        self.serial = serial.Serial( port,
-                                baudrate,
-                                bytesize,
-                                parity,
-                                stopbits,
-                                packet_timeout,
-                                xonxoff,
-                                rtscts,
-                                writeTimeout,
-                                dsrdtr)
+        self.serial = serial.Serial(port, baudrate, bytesize, parity, stopbits, packet_timeout, xonxoff, rtscts, writeTimeout, dsrdtr)
         
         self.running = Event()
+        self.buffer  = ''
+        log.debug('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
 
-        self.buffer = ''
-        
-#        try:
-#            self.struct = struct.Struct(data_block_format)
-#        except:
-#            raise StandardError('Problem encountered loading struct with ' +data_block_format)        
-#        self.packet_size = self.struct.size
-        
-        if read_q == None:
-            self.read_q = Queue()
-        else:
-            self.read_q = read_q
     def __del__(self):
-        print "Deleting async_serial, stopping thread and closeing serial port"
-        self.running.clear()
+        log.debug("About to delete the object")
+        self.close()
+        log.debug("Closing serial interface")
         self.serial.close()
+        if self.serial.closed:
+            log.error("The serial connection still appears to be open")
+        else:
+            log.debug("The serial connection is closed")
+        log.debug("Object deleted")
         
     def start_thread(self):
-        '''Open the serial serial bus to be read. This starts the listening
+        '''
+        Open the serial serial bus to be read. This starts the listening
         thread.
         '''
+        log.debug('start_thread()')
         self.serial.flushInput()
         self.running.set()
         self.start()
@@ -123,7 +117,8 @@ class DaqInterface(Thread):
         return serial_error
     
     def read(self, expected_text=''):
-        '''read data in the serial port buffer
+        '''
+        read data in the serial port buffer
         - check if the serial port is open 
         - attempt to read all data availiable in the buffer
         - pack the serial data and the serial errors
@@ -137,7 +132,8 @@ class DaqInterface(Thread):
                 while time.clock() - to < TIMEOUT and not done:
                     if self.is_alive():
                         if not self.read_q.empty():
-                            serial_data += self.read_q.get_nowait()                            
+                            tmp = self.read_q.get_nowait()
+                            serial_data += tmp[1]
                     else:                        
                         n = self.serial.inWaiting()
                         if n > 0:
@@ -153,9 +149,9 @@ class DaqInterface(Thread):
         return (serial_error, serial_data)
     
     def query(self,cmd, expected_text='', tag='',json=0, delay=0):
-        
-        #if tag:
-        #    expected_text = '</' + tag + '>'
+        """
+        sends cmd to the controller and watis until expected_text is found in the buffer.
+        """
         
         query_data = ''
         self.send(cmd)
@@ -178,67 +174,77 @@ class DaqInterface(Thread):
         return (query_error, query_data)
 
     def close(self):
-        '''Close the listening thread.
         '''
+        Close the listening thread.
+        '''
+        log.debug('close() - closing the worker thread')
         self.running.clear()
-    
-    def process_q(self):
-        final_data = ''
-        if self.read_q.qsize() > 0:            
-            q_data = self.read_q.get(1,1)
-            if 'json>' in q_data:
-                re_data = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
-                temp = re_data.findall(q_data)
-                try:
-                    final_data = sjson.loads(temp[0])
-                except:
-                    final_data = "json loads error"
-            else:
-                if self.read_all_data:
-                    final_data = q_data
-        return final_data
+        if self.is_alive():
+            log.error('The thread is still alive: is_alive() == True')
+        else:
+            log.error('The thread is dead: is_alive() == False')
 
     def run(self):
-        '''Run is the function that runs in the new thread and is called by
+        '''
+        Run is the function that runs in the new thread and is called by
         start(), inherited from the Thread class
         '''
-        print "Executing run() function"
+        
         try:
-            print "\tEntering while loop"
-            while 1:
-                while(self.running.isSet()):
-                    if self.serial.inWaiting():
-                        new_data = self.serial.read(1)                
-                        self.buffer = self.buffer + new_data                
-                        if self.buffer[-2:] == '\r\n':
-                            # Put the unpacked data onto the read queue                    
-                            self.read_q.put(self.buffer)
-                            print self.buffer
-                            if self.submit:
-                                if 'json>' in self.buffer:
-                                     re_data = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
-                                     temp = re_data.findall(self.buffer)
-                                     try:
-                                         final_data = sjson.loads(temp[0])
-                                         res = requests.get('http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, final_data[0], final_data[1]))
-                                         if res.ok:
-                                             print res.content
-                                         else:
-                                             print res
-                                                  
-                                     except:
-                                         final_data = "json loads error"
-                            
-                            # Clear the buffer
-                            self.buffer = ''
-                            #self.process_q()
+            log.debug('Starting the listner thread')
+            while(self.running.isSet()):
+                bytes_in_waiting = self.serial.inWaiting()
+                if bytes_in_waiting:
+                    new_data = self.serial.read(bytes_in_waiting)            
+                    self.buffer = self.buffer + new_data
+                    if self.buffer[-2:] == '\r\n':
+                        # Put the unpacked data onto the read queue                    
+                        timestamp = datetime.now()                        
+                        if '</json>' in self.buffer:
+                            log.debug('Found json data in the buffer: %s' % self.buffer)
+                            temp = self.re_data.findall(self.buffer)
+                            try:
+                                final_data = [timestamp, sjson.loads(temp[0])]
+                                self.json_q.put(final_data)
+                            except Exception as E:
+                                log.error(E.message)
+                                final_data = [timestamp, "json loads error"]   
+                                self.json_q.put(final_data)
+                        else:
+                            self.read_q.put([timestamp, self.buffer])
 
-        except KeyboardInterrupt:
-            print "\tException occured"
-            self.interrupt_main()
-            self.close()
-            return None
-        print "Endof run() function"
+                        self.buffer = ''
+
+        except Exception as E:
+            log.error("Exception occured, within the run function: %s" % E.message)
+            self.close()            
+        log.debug('Exiting run() function')
+
+
+############################################################################################
+    def process_q(self):
+        """
+        """
+        if not self.json_q.empty():
+            q_data = self.json_q.get(1,1)
+            log.debug('q_data = %s' % str(q_data[1]))
+            if self.submit:
+                for data in q_data[1]:
+                    url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[2])
+                    log.debug('submitting to: %s' % url)
+                    
+                    res = get(url)
+                    if res.ok:
+                        log.debug(res.content)
+                    else:
+                        log.debug(res)
+            else:
+                pass
+        else:
+            log.debug('json_q is empty')
+    
+    def process_q_all(self):
+        pass
 
 if __name__ == '__main__':
     opt = docopt(__doc__)
@@ -253,7 +259,9 @@ if __name__ == '__main__':
             print "query command returned error code: ", resp[0]
             print "Full response: ", resp
     else:
-        D.submit_to = opt['--submit_to']
+        pass
+        # D.submit_to = opt['--submit_to']
+
 
     # from PyDaq.Sandbox.aserial import *    
 #    A = async_serial(13)    
