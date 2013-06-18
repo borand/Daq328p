@@ -10,7 +10,7 @@ Usage:
 Options:
   -h, --help
   --dev=DEV              [default: /dev/ttyS0]
-  --submit_to=SUBMIT_TO  [default: 192.168.1.150]
+  --submit_to=SUBMIT_TO  [default: sensoredweb.heroku.com]
 
 """
 
@@ -179,10 +179,7 @@ class DaqInterface(Thread):
         '''
         log.debug('close() - closing the worker thread')
         self.running.clear()
-        if self.is_alive():
-            log.error('The thread is still alive: is_alive() == True')
-        else:
-            log.error('The thread is dead: is_alive() == False')
+
 
     def run(self):
         '''
@@ -216,8 +213,7 @@ class DaqInterface(Thread):
                         self.buffer = ''
 
         except Exception as E:
-            log.error("Exception occured, within the run function: %s" % E.message)
-            self.close()            
+            log.error("Exception occured, within the run function: %s" % E.message)            
         log.debug('Exiting run() function')
 
 
@@ -235,12 +231,12 @@ class DaqInterface(Thread):
                     
                     res = get(url)
                     if res.ok:
-                        log.debug(res.content)
+                        log.info(res.content)
                     else:
-                        log.debug(res)
+                        log.info(res)
             else:
                 pass
-        else:
+        else    :
             log.debug('json_q is empty')
     
     def process_q_all(self):
@@ -249,18 +245,30 @@ class DaqInterface(Thread):
 if __name__ == '__main__':
     opt = docopt(__doc__)
     
+    D = DaqInterface(opt['--dev']);
     if opt['test']:
-        print "Test Mode"
-        D = DaqInterface(opt['--dev']);
+        print "Test Mode"        
         resp = D.query('I',expected_text="cmd>")
         if not resp[0]:
             print resp[1]
         else:
             print "query command returned error code: ", resp[0]
             print "Full response: ", resp
-    else:
-        pass
-        # D.submit_to = opt['--submit_to']
+    else:        
+        D.submit_to = opt['--submit_to']
+        D.start_thread()
+        log.level = 2
+        try:
+            while True:
+                if not D.json_q.empty():
+                    log.debug('Found items in Q')
+                    D.process_q()
+                
+        except KeyboardInterrupt:            
+            log.debug('Key pressed.')
+    D.close()
+    del(D)
+    log.info('All Done.')
 
 
     # from PyDaq.Sandbox.aserial import *    
