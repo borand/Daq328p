@@ -141,7 +141,7 @@ INSTALLED_APPS = (
     # 'django.contrib.admindocs',
 )
 
-Daq = hardware.DaqInterface('/dev/ttyUSB0')
+Daq = hardware.DaqInterface('/dev/ttyS0')
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to

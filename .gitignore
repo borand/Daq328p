@@ -2,3 +2,6 @@
 .pydevproject
 .project
 vn.sh
+venv
+nohup.out
+
