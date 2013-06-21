@@ -67,7 +67,12 @@ class DaqInterface(Thread):
         
         self.running = Event()
         self.buffer  = ''
-        log.debug('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
+        log.info('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
+        out = self.query('I')
+
+        if not out[0]:
+            log.info(out[1])
+
 
     def __del__(self):
         log.debug("About to delete the object")
@@ -205,8 +210,9 @@ class DaqInterface(Thread):
                                 self.json_q.put(final_data)
                             except Exception as E:
                                 log.error(E.message)
+                                log.error(E.message)
                                 final_data = [timestamp, "json loads error"]   
-                                self.json_q.put(final_data)
+                                self.read_q.put([timestamp, self.buffer])
                         else:
                             self.read_q.put([timestamp, self.buffer])
 
