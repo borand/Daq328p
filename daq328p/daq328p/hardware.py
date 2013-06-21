@@ -225,15 +225,19 @@ class DaqInterface(Thread):
             q_data = self.json_q.get(1,1)
             log.debug('q_data = %s' % str(q_data[1]))
             if self.submit:
-                for data in q_data[1]:
-                    url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[2])
-                    log.debug('submitting to: %s' % url)
-                    
-                    res = get(url)
-                    if res.ok:
-                        log.info(res.content)
-                    else:
-                        log.info(res)
+                try:
+                    for data in q_data[1]:
+                        url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[2])
+                        log.debug('submitting to: %s' % url)
+                        
+                        res = get(url)
+                        if res.ok:
+                            log.info(res.content)
+                        else:
+                            log.info(res)
+                except Exception as E:
+                    log.error("Exception occured, within the process_q() function: %s" % E.message)
+                    log.error('q_data = %s' % str(q_data[1]))
             else:
                 pass
         else    :
