@@ -100,16 +100,18 @@ class DaqInterface(Thread):
             self.serial.open()
         return self.serial.isOpen()
     
-    def send(self, data):
+    def send(self, data, CR=True):
         '''Send command to the serial port
         '''
         if len(data) == 0:               
             return
         
-        if (data[-1] == "\n"):
-            pass            
-        else:
-            data += "\n"
+        # Automatically append \n by default, but allow the user to send raw characters as well
+        if CR:
+            if (data[-1] == "\n"):
+                pass            
+            else:
+                data += "\n"
             
         if self.open():
             try:
@@ -268,11 +270,15 @@ if __name__ == '__main__':
         D.submit_to = opt['--submit_to']
         D.start_thread()
         log.level = 2
+        to = time.time()
         try:
             while True:
                 if not D.json_q.empty():
                     log.debug('Found items in Q')
                     D.process_q()
+                if time.time() - to > 30:
+                    D.send('A')
+                    to = time.time()
                 
         except KeyboardInterrupt:            
             log.debug('Key pressed.')
