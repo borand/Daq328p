@@ -235,7 +235,7 @@ class DaqInterface(Thread):
             if self.submit:
                 try:
                     for data in q_data[1]:
-                        url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[2])
+                        url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[-1])
                         log.debug('submitting to: %s' % url)
                         
                         res = get(url)
@@ -277,7 +277,7 @@ if __name__ == '__main__':
                     log.debug('Found items in Q')
                     D.process_q()
                 if time.time() - to > 30:
-                    D.send('A')
+                    D.send('A', CR=False)
                     to = time.time()
                 
         except KeyboardInterrupt:            
