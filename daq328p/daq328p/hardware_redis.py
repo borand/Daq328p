@@ -20,9 +20,10 @@ import struct
 import time
 import re
 import simplejson as sjson
-import twitter
+#import twitter
+import redis
 
-from twitter_config import my_auth
+#from twitter_config import my_auth
 
 from threading import Thread,Event
 from Queue import Queue, Empty
@@ -32,7 +33,7 @@ from logbook import Logger
 from docopt import docopt
 from requests import get
 
-twit = twitter.Twitter(auth=my_auth)
+#twit = twitter.Twitter(auth=my_auth)
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
@@ -72,11 +73,16 @@ class DaqInterface(Thread):
         
         self.running = Event()
         self.buffer  = ''
+
         log.info('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
         out = self.query('I')
 
         if not out[0]:
             log.info(out[1])
+
+        self.redis = redis.Redis()
+        self.pubsub = self.redis.pubsub()
+        self.pubsub.subscribe('Daq328p')
 
 
     def __del__(self):
@@ -200,12 +206,15 @@ class DaqInterface(Thread):
         try:
             log.debug('Starting the listner thread')
             while(self.running.isSet()):
+                for item in self.pubsub.listen():
+                    self.send(item['data'])
                 bytes_in_waiting = self.serial.inWaiting()
                 if bytes_in_waiting:
                     new_data = self.serial.read(bytes_in_waiting)            
                     self.buffer = self.buffer + new_data
                     if self.buffer[-2:] == '\r\n':
-                        # Put the unpacked data onto the read queue                    
+                        # Put the unpacked data onto the read queue
+                        self.redis.publish('Daq328pOut',self.buffer)
                         timestamp = datetime.now()                        
                         if '</json>' in self.buffer:
                             log.debug('Found json data in the buffer: %s' % self.buffer)
