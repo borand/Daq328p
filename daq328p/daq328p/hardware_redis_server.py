@@ -21,13 +21,14 @@ import time
 import re
 import simplejson as sjson
 import redis
+import random
 
 from datetime import datetime
 from logbook import Logger
 from docopt import docopt
 from requests import get
 import threading
-
+ 	
 class SerialRedis(threading.Thread):
 
     def __init__(self, channel="serialserver", port='/dev/ttyUSB0'):
@@ -56,11 +57,13 @@ class SerialRedis(threading.Thread):
     def work(self, item):
     	self.Log.info('item=' + str(item))
     	if item['type'] == 'message':
-        	self.Log.info('  cmd=' + str(item['data']))
-        	self.Log.info('  res=' + str(item['data']))
-        	out = self.query(item['data'])        	
+    		cmd = item['data'][0]
+    		cmd_id = item['data'][1]
+        	self.Log.info('  cmd_id=%d, cmd=%s' % (cmd_id, cmd))
+        	out = self.query(cmd)
+        	self.Log.info('  res=' + out[1])        	
         	self.redis.publish('res', out[1])
-        	self.redis.set('res',out[1])
+        	self.redis.set('res',[out[1], cmd_id] )
 
     def run(self):
     	self.Log.info('run()')
@@ -153,12 +156,33 @@ class SerialRedis(threading.Thread):
             query_data = sjson.loads(query_data)
         return (query_error, query_data)
 
+class Client():
+
+	def __init__(self, channel="serialserver"):
+		self.redis = redis.Redis()
+		self.channel = channel	
+		self.Log = Logger('Client')
+
+	def read(self):
+		self.Log.debug('read()')
+		return self.redis.get('res')
+
+	def send(self, cmd="\n"):
+		cmd_id = self.Log.debug('read()')
+		self.Log.debug('send(cmd=%s)' % cmd)
+		self.redis.publish(self.channel, [cmd, cmd_id])
+		if self.redis.get('cmd') == cmd:
+			return 0
+		else:
+			return 1
+
+	def query(self, cmd):
+		self.send()
 
 if __name__ == "__main__":
     r = redis.Redis()
     Server = SerialRedis()
-    Server.start()
-    
+    Server.start()    
     
     r.publish('serialserver', 'this will reach the listener')
     r.publish('serialserver', 'KILL')

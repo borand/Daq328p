@@ -1,11 +1,14 @@
+import simplejson
+import datetime
+
 from django.http import HttpResponse
 from django.core import serializers
 from django.template import RequestContext
 from django.shortcuts import render_to_response
-import simplejson
 from django.utils.log import getLogger
+
 from . settings import Daq
-import datetime
+
 logger = getLogger("app")
 
 def home(request):
