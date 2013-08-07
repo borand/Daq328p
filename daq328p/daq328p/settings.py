@@ -15,8 +15,6 @@ print "#  SETTINGS.PY                                                           
 print "#                                                                             #"
 print '# root: ', root()
 
-import hardware
-
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
 
@@ -140,8 +138,6 @@ INSTALLED_APPS = (
     # Uncomment the next line to enable admin documentation:
     # 'django.contrib.admindocs',
 )
-
-Daq = hardware.DaqInterface('/dev/ttyS0')
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to

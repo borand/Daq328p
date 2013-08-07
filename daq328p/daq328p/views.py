@@ -7,20 +7,15 @@ from django.template import RequestContext
 from django.shortcuts import render_to_response
 from django.utils.log import getLogger
 
-from . settings import Daq
+from hardware_redis_server import Client
+Daq = Client()
 
 logger = getLogger("app")
 
 def home(request):
-    time_stamp = (datetime.datetime.now())
-    Daq.send('\nI')
-    res = Daq.read()
-    errors = res[0]
-    if errors:
-        msg = "Loaded at: %s errors in reading H" % time_stamp
-    else:
-        msg = str(time_stamp) + '\n' + res[1]
-        
+    time_stamp = (datetime.datetime.now())    
+    res = Daq.query('I')
+    msg = str(time_stamp) + '\n' + res[1]
     logger.info(msg)
 #    return HttpResponse(msg)
     page_context = {'page_title': 'Daq328p', 'datetime':msg}
@@ -30,16 +25,17 @@ def query(request, **kwargs):
     cmd = kwargs['cmd']
     logger.info('cmd = ' + cmd)
     time_stamp = (datetime.datetime.now())
-    res = Daq.read()
-    res = Daq.query(cmd,expected_text='cmd>')
-    errors = res[0]
-    if errors:
-        msg = "Loaded at: %s errors in reading H" % time_stamp
-    else:
-        msg = str('query : ') + res[1]
+    #res = Daq.read()
+    #res = Daq.query(cmd,expected_text='cmd>')
+    res = Daq.query(cmd)
+    
+    # if errors:
+    #     msg = "Loaded at: %s errors in reading H" % time_stamp
+    # else:
+    msg = str('query : ') + res
 #    logger.info(res[1])    
 #    print simplejson.dumps(str(res[1]))
-    return HttpResponse(simplejson.dumps(str(res[1])),mimetype='text/json')
+    return HttpResponse(simplejson.dumps(str(res)),mimetype='text/json')
 
 def cmd(request):    
     logger.debug("cmd()")
@@ -50,8 +46,7 @@ def cmd(request):
     if "ping" in cmd:
         logger.debug("\trespondng to ping")
         response = '"pong"' 
-    elif "options_threading" in cmd:
-        Daq.start_thread()
+    elif "options_threading" in cmd:        
         response = '"thread started"'
     else:
         response = '"none"'
