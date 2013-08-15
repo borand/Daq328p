@@ -28,7 +28,112 @@ from logbook import Logger
 from docopt import docopt
 from requests import get
 import threading
-    
+
+##########################################################################################
+class InterfaceTemplate(object):
+    last_cmd = ''
+    """docstring for InterfaceTemplate"""
+    def __init__(self):
+        self.idn = str(self)
+
+    def __unicode__(self):
+        return str(self)
+
+    def send(self, cmd, *kwargs):
+        self.last_cmd = cmd
+        return True
+
+    def read(self, *kwargs):
+        return 'InterfaceTemplate resposne to %s' % self.last_cmd
+
+    def query(self, cmd, *kwargs):
+        self.send(cmd, kwargs)
+        return self.read()
+
+##########################################################################################
+class HwRedisInterface(threading.Thread):
+
+    def __init__(self, interface=InterfaceTemplate(), channel=''):
+        threading.Thread.__init__(self)
+        self.timeout   = 1
+        self.interface = interface
+        self.redis     = redis.Redis()
+        if channel=='':
+            self.channel   = str(interface)
+        else:
+            self.channel   = channel
+
+        self.pubsub    = self.redis.pubsub()
+        self.Log       = Logger('HwRedisInterface')
+        self.Log.debug('__init__(channel=%s)' % self.channel)
+
+        self.pubsub.subscribe(self.channel)
+        self.start()
+        self.setName('HwRedisInterface-Thread')
+
+    def __del__(self):
+        self.Log.debug('__del__()')
+        self.stop()
+
+    def send(self, cmd, *kwargs):
+        to = time.time()
+        try:
+            self.interface.send(cmd, kwargs)
+            self.Log.debug("    send  = %.3f" % (time.time() - to))
+            self.redis.set('%s_send_last' % self.channel, cmd)
+            self.Log.debug("    send-redis  = %.3f" % (time.time() - to))
+            return True
+        except Exception as E:
+            self.Log.error(E.message)
+            return False
+
+    def read(self, *kwargs):
+        return "def read()"
+
+    def query(self, cmd, *kwargs):
+        return cmd
+
+    def run(self):
+        self.Log.debug('run()')
+        for item in self.pubsub.listen():
+            if item['data'] == "KILL":
+                self.pubsub.unsubscribe()
+                self.Log.info("unsubscribed and finished")
+                break
+            else:
+                self.process_message(item)
+        self.Log.debug('end of run()')
+
+    def process_message(self, item):
+        self.Log.debug('process_message(type=%s)' % item['type'])
+        if item['type'] == 'message':
+            try:
+                msg = sjson.loads(item['data'])
+                self.Log.debug('    msg=%s, from=%s' % (msg['cmd'], msg['from']))
+                cmd = msg['cmd']
+                if isinstance(cmd,list):
+                    is_query = cmd[1]
+                    cmd      = cmd[0]
+                else:
+                    is_query = True
+                    
+            except Exception as E:
+                self.Log.error(E.message)
+                return
+            
+            if is_query:
+                self.Log.debug('    query(cmd)')
+                out = self.interface.query(cmd)
+                self.redis.set(msg['from'],out)
+                self.redis.publish('res', out)
+                timeout = msg['timeout']
+                timeout = self.timeout
+                self.redis.expire(msg['from'], timeout)
+            else:
+                self.Log.debug('    send(cmd)')
+                out = self.interface.send(cmd)
+
+##########################################################################################
 class SerialRedis(threading.Thread):
 
     def __init__(self, port='/dev/ttyUSB0'):
@@ -186,19 +291,19 @@ class SerialRedis(threading.Thread):
         self.Log.debug("    query  = %.3f" % (time.time() - to))
         return (query_error, query_data)
 
+##########################################################################################
 class Client():
 
     def __init__(self, channel="/dev/ttyUSB0"):
         self.redis = redis.Redis()
         self.channel = channel  
-        self.timeout = 3
+        self.timeout = 1
         self.instance_signature = str(self)
         self.Log = Logger('Client')
 
     def __del__(self):
         self.Log.debug('__del__()')
         self.redis.delete(self.instance_signature)
-
 
     def read(self):
         self.Log.debug('read()')
@@ -208,11 +313,11 @@ class Client():
             self.redis.delete(self.instance_signature)
         return data_read
 
-    def send(self, cmd="\n", timeout=0):
+    def send(self, cmd="\n", timeout=0, query=0):
         try:
             if timeout == 0:
                 timeout = self.timeout
-            msg = sjson.dumps({'from': self.instance_signature, 'cmd':cmd, 'timeout': timeout , 'timestamp': str(datetime.now())})
+            msg = sjson.dumps({'from': self.instance_signature, 'cmd': [cmd, query], 'timeout': timeout , 'timestamp': str(datetime.now())})
             self.Log.debug('send(cmd=%s)' % cmd)
             self.Log.debug('    full msg=%s)' % msg)
             self.redis.publish(self.channel, msg)
@@ -221,9 +326,9 @@ class Client():
 
     def query(self, cmd):
         self.Log.debug('query(cmd=%s)' % cmd)       
-        self.send(cmd)
+        self.send(cmd, query=1)
         
-        to = time.clock()                
+        to = time.clock()
         done = 0
         while time.clock() - to < self.timeout and (not done):
             if self.redis.exists(self.instance_signature):
