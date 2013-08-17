@@ -22,7 +22,7 @@ import re
 import simplejson as sjson
 import twitter
 
-from twitter_config import my_auth
+
 
 from threading import Thread,Event
 from Queue import Queue, Empty
@@ -32,7 +32,8 @@ from logbook import Logger
 from docopt import docopt
 from requests import get
 
-twit = twitter.Twitter(auth=my_auth)
+# from twitter_config import my_auth
+# twit = twitter.Twitter(auth=my_auth)
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
@@ -72,6 +73,7 @@ class DaqInterface(Thread):
         
         self.running = Event()
         self.buffer  = ''
+        self.log = Logger('DaqInterface')        
         log.info('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
         out = self.query('I')
 
@@ -160,11 +162,19 @@ class DaqInterface(Thread):
             
         return (serial_error, serial_data)
     
-    def query(self,cmd, expected_text='', tag='',json=0, delay=0):
+    def query(self,cmd, **kwargs):
         """
         sends cmd to the controller and watis until expected_text is found in the buffer.
         """
         
+        expected_text = kwargs.get('expected_text','')
+        tag           = kwargs.get('tag','')
+        json          = kwargs.get('json',0)
+        delay         = kwargs.get('delay',0)
+
+        self.log.debug('query(cmd=%s, expected_text=%s, tag=%s,json=%d, delay=%d):' % \
+            (cmd, expected_text, tag, json, delay))
+
         query_data = ''
         self.send(cmd)
         time.sleep(delay)
@@ -191,7 +201,6 @@ class DaqInterface(Thread):
         '''
         log.debug('close() - closing the worker thread')
         self.running.clear()
-
 
     def run(self):
         '''

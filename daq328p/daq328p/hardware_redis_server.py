@@ -58,6 +58,8 @@ class HwRedisInterface(threading.Thread):
         self.timeout   = 1
         self.interface = interface
         self.redis     = redis.Redis()
+        self.msg_count = 0
+        self.busy = 0;
         if channel=='':
             self.channel   = str(interface)
         else:
@@ -75,23 +77,41 @@ class HwRedisInterface(threading.Thread):
         self.Log.debug('__del__()')
         self.stop()
 
-    def send(self, cmd, *kwargs):
+    def send(self, cmd, **kwargs):
+        self.Log.debug("send(%s,%s)" % (cmd,str(kwargs)))
         to = time.time()
         try:
             self.interface.send(cmd, kwargs)
             self.Log.debug("    send  = %.3f" % (time.time() - to))
-            self.redis.set('%s_send_last' % self.channel, cmd)
-            self.Log.debug("    send-redis  = %.3f" % (time.time() - to))
+            self.redis.set('%s_send_last' % self.channel, cmd)            
             return True
-        except Exception as E:
+        except Exception as E:            
             self.Log.error(E.message)
             return False
 
-    def read(self, *kwargs):
-        return "def read()"
+    def read(self, **kwargs):
+        self.Log.debug("read(%s)" % str(kwargs))
+        to = time.time()
+        try:
+            out = self.interface.read(**kwargs)            
+            self.Log.debug("    interface.read() time = %.3f" % (time.time() - to))
+            self.redis.set('%s_read_last' % self.channel, out[1])                
+            return out[1]
+        except Exception as E:
+            self.Log.error(E.message)
+            return None
 
-    def query(self, cmd, *kwargs):
-        return cmd
+    def query(self, cmd, **kwargs):
+        self.Log.debug("query(%s,%s)" % (cmd,str(kwargs)))
+        to = time.time()
+        self.Log.debug("    query(%s, %s)" % (cmd, str(kwargs)))
+        try:
+            out = self.interface.query(cmd, **kwargs)
+            self.Log.debug("    interface.query() time = %.3f" % (time.time() - to))            
+            return out[1]
+        except Exception as E:
+            self.Log.error(E.message)
+            return E
 
     def run(self):
         self.Log.debug('run()')
@@ -101,16 +121,22 @@ class HwRedisInterface(threading.Thread):
                 self.Log.info("unsubscribed and finished")
                 break
             else:
-                self.process_message(item)
+                self.msg_count = self.msg_count + 1
+                # self.Log.debug('run() - incoming message')
+                if not self.busy:
+                    self.process_message(item)
         self.Log.debug('end of run()')
 
     def process_message(self, item):
         self.Log.debug('process_message(type=%s)' % item['type'])
+        to = time.time()
+        self.busy = True
+
         if item['type'] == 'message':
             try:
                 msg = sjson.loads(item['data'])
-                self.Log.debug('    msg=%s, from=%s' % (msg['cmd'], msg['from']))
-                cmd = msg['cmd']
+                self.Log.debug('    msg=%s, from=%s' % (msg['cmd'], msg['from']))                
+                cmd = msg['cmd']                
                 if isinstance(cmd,list):
                     is_query = cmd[1]
                     cmd      = cmd[0]
@@ -118,20 +144,22 @@ class HwRedisInterface(threading.Thread):
                     is_query = True
                     
             except Exception as E:
-                self.Log.error(E.message)
-                return
+                self.Log.error(E.message)                
             
+            self.Log.debug('    is_query=%d' % is_query)
             if is_query:
                 self.Log.debug('    query(cmd)')
                 out = self.interface.query(cmd)
-                self.redis.set(msg['from'],out)
-                self.redis.publish('res', out)
+                self.redis.set(msg['from'],out[1])
+                self.redis.publish('res', out[1])
                 timeout = msg['timeout']
                 timeout = self.timeout
                 self.redis.expire(msg['from'], timeout)
             else:
                 self.Log.debug('    send(cmd)')
                 out = self.interface.send(cmd)
+            self.busy = False
+            return out
 
 ##########################################################################################
 class SerialRedis(threading.Thread):
@@ -314,11 +342,11 @@ class Client():
         return data_read
 
     def send(self, cmd="\n", timeout=0, query=0):
+        self.Log.debug('send(cmd=%s)' % cmd)
         try:
             if timeout == 0:
                 timeout = self.timeout
-            msg = sjson.dumps({'from': self.instance_signature, 'cmd': [cmd, query], 'timeout': timeout , 'timestamp': str(datetime.now())})
-            self.Log.debug('send(cmd=%s)' % cmd)
+            msg = sjson.dumps({'from': self.instance_signature, 'cmd': [cmd, query], 'timeout': timeout , 'timestamp': str(datetime.now())})            
             self.Log.debug('    full msg=%s)' % msg)
             self.redis.publish(self.channel, msg)
         except Exception as E:
