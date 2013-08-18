@@ -120,8 +120,7 @@ class HwRedisInterface(threading.Thread):
                 self.pubsub.unsubscribe()
                 self.Log.info("unsubscribed and finished")
                 break
-            else:
-                self.msg_count = self.msg_count + 1
+            else:                
                 # self.Log.debug('run() - incoming message')
                 if not self.busy:
                     self.process_message(item)
@@ -132,34 +131,43 @@ class HwRedisInterface(threading.Thread):
         to = time.time()
         self.busy = True
 
+        self.msg_count = self.msg_count + 1
         if item['type'] == 'message':
             try:
                 msg = sjson.loads(item['data'])
-                self.Log.debug('    msg=%s, from=%s' % (msg['cmd'], msg['from']))                
-                cmd = msg['cmd']                
-                if isinstance(cmd,list):
-                    is_query = cmd[1]
-                    cmd      = cmd[0]
+                self.Log.debug('    msg=%s, from=%s' % (msg['cmd'], msg['from']))
+                
+                if isinstance(msg['cmd'],list):
+                    cmd      = msg['cmd'][0]
+                    kwargs   = msg['cmd'][1]
+                    is_query = msg['cmd'][2]
                 else:
+                    cmd      = msg['cmd']
                     is_query = True
                     
             except Exception as E:
                 self.Log.error(E.message)                
             
             self.Log.debug('    is_query=%d' % is_query)
-            if is_query:
-                self.Log.debug('    query(cmd)')
-                out = self.interface.query(cmd)
-                self.redis.set(msg['from'],out[1])
+            if is_query:                
+                out = self.interface.query(cmd,expected_text='\r\n')
+                self.Log.debug('    query(cmd=%s) = %s' % (cmd, out[1]))
+
                 self.redis.publish('res', out[1])
                 timeout = msg['timeout']
                 timeout = self.timeout
+                self.redis.set(msg['from'],out[1])
                 self.redis.expire(msg['from'], timeout)
+                self.Log.debug('    query(cmd=%s) = %s' % (cmd, out[1]))
             else:
                 self.Log.debug('    send(cmd)')
                 out = self.interface.send(cmd)
             self.busy = False
             return out
+        else:
+            self.busy = False
+            return None
+
 
 ##########################################################################################
 class SerialRedis(threading.Thread):
@@ -341,12 +349,14 @@ class Client():
             self.redis.delete(self.instance_signature)
         return data_read
 
-    def send(self, cmd="\n", timeout=0, query=0):
+    def send(self, cmd="\n", **kwargs):
         self.Log.debug('send(cmd=%s)' % cmd)
+        timeout = kwargs.pop('timeout',0)
+        query   = kwargs.pop('query',0)
         try:
             if timeout == 0:
                 timeout = self.timeout
-            msg = sjson.dumps({'from': self.instance_signature, 'cmd': [cmd, query], 'timeout': timeout , 'timestamp': str(datetime.now())})            
+            msg = sjson.dumps({'from': self.instance_signature, 'cmd': [cmd, kwargs, query], 'timeout': timeout , 'timestamp': str(datetime.now())})
             self.Log.debug('    full msg=%s)' % msg)
             self.redis.publish(self.channel, msg)
         except Exception as E:
