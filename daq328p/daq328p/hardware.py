@@ -167,7 +167,7 @@ class DaqInterface(Thread):
         sends cmd to the controller and watis until expected_text is found in the buffer.
         """
         
-        expected_text = kwargs.get('expected_text','')
+        expected_text = kwargs.get('expected_text','\r\n')
         tag           = kwargs.get('tag','')
         json          = kwargs.get('json',0)
         delay         = kwargs.get('delay',0)

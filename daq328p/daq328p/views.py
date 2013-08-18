@@ -8,12 +8,12 @@ from django.shortcuts import render_to_response
 from django.utils.log import getLogger
 
 from hardware_redis_server import Client
-Daq = Client()
 
 logger = getLogger("app")
 
 def home(request):
     time_stamp = (datetime.datetime.now())    
+    Daq = Client()
     res = Daq.query('I')
     msg = str(time_stamp) + '\n' + res[1]
     logger.info(msg)
@@ -27,6 +27,7 @@ def query(request, **kwargs):
     time_stamp = (datetime.datetime.now())
     #res = Daq.read()
     #res = Daq.query(cmd,expected_text='cmd>')
+    Daq = Client()
     res = Daq.query(cmd)
     
     # if errors:
