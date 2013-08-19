@@ -20,9 +20,6 @@ import struct
 import time
 import re
 import simplejson as sjson
-import twitter
-
-
 
 from threading import Thread,Event
 from Queue import Queue, Empty
@@ -32,18 +29,15 @@ from logbook import Logger
 from docopt import docopt
 from requests import get
 
-# from twitter_config import my_auth
-# twit = twitter.Twitter(auth=my_auth)
-
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
 FIVEBITS, SIXBITS, SEVENBITS, EIGHTBITS = (5,6,7,8)
 TIMEOUT = 3
 
-log = Logger('hardware')
-log.info("2013.06.16 23:17")
+log = Logger('daq328p')
+log.info("2013.08.16 20:23")
 
-class DaqInterface(Thread):
+class Daq328p(Thread):
     read_all_data = False
     submit_to     = 'sensoredweb.heroku.com'
     submit        = True
@@ -73,8 +67,8 @@ class DaqInterface(Thread):
         
         self.running = Event()
         self.buffer  = ''
-        self.log = Logger('DaqInterface')        
-        log.info('DaqInterface(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
+        self.log = Logger('Daq328p')
+        log.info('Daq328p(is_alive=%d, serial_port_open=%d)' % (self.is_alive(), not self.serial.closed))
         out = self.query('I')
 
         if not out[0]:
@@ -238,7 +232,6 @@ class DaqInterface(Thread):
             log.error("Exception occured, within the run function: %s" % E.message)            
         log.debug('Exiting run() function')
 
-
 ############################################################################################
     def process_q(self):
         """
@@ -299,11 +292,3 @@ if __name__ == '__main__':
     D.close()
     del(D)
     log.info('All Done.')
-
-
-    # from PyDaq.Sandbox.aserial import *    
-#    A = async_serial(13)    
-#    print A.query("adc", "</a>", "a", json=0)
-    
-
-    

@@ -15,18 +15,14 @@ Options:
 
 """
 
-import serial
-import struct
 import time
 import re
 import simplejson as sjson
 import redis
-import random
 
 from datetime import datetime
 from logbook import Logger
 from docopt import docopt
-from requests import get
 import threading
 
 version = '2013.08.17:2139'
@@ -238,9 +234,6 @@ class Client():
         return self.read()
 
 if __name__ == "__main__":
-    r = redis.Redis()
-    Server = SerialRedis()
-    Server.start()    
-    
-    r.publish('serialserver', 'this will reach the listener')
-    r.publish('serialserver', 'KILL')
+    r = HwRedisInterface(channel='test')
+    r.query('I')
+    r.stop()
