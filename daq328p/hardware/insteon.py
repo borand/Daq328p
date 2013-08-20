@@ -12,6 +12,8 @@ import os
 
 from logbook import Logger
 
+from datastore import submit
+
 CMDS = {0x50: ['Standard Message Received', 0, 11,],
         96  : ['GetImInfo',                 2, 9, ],
         98  : ['SendMessage',               8, 9, ],
@@ -29,8 +31,8 @@ STANDARD_CMDS = {
                  }
 
 dining_room = [0x18, 0x1d, 0x04]
-living_room = [0x09, 0x85, 0x94]
-ikea_lamp1  = [0x1b, 0x7a, 0x50]
+living_room = [0x09, 0x8E, 0x94]
+ikea_lamp1  = [0x18, 0x98, 0xAA]
 ikea_lamp2  = [0x16, 0x83, 0x87]
 outdoor     = [0x14, 0xa1, 0x28]
 light       = [0x20, 0x1f, 0x11]
@@ -46,6 +48,15 @@ def GetDecAddress(address):
 
 def SplitStr(s, size=2):
     return [s[i:i+size] for i in xrange(0, len(s), size)]
+
+def str2hex(address):
+    return [int(i,16) for i in address.split('.')]
+
+def hex2str(address):
+    return '%02x.%02x.%02x' % (address[0],address[1],address[2])
+
+def hex2dec(address):
+    return [int(h) for h in address] 
 
 def str2dec(s):
     return [int(i,16) for i in SplitStr(s)]
@@ -198,21 +209,21 @@ class InsteonPLM(object):
         read_status = self.read_response([80])
         return 
     
-    def GetSwitchStatus(self, hex_address):
-        cmd         = [98, 0, 0, 0, 15, 25, 255]
-        dec_address = [int(h) for h in hex_address]
-        cmd[1:4]    = dec_address        
-        self.send(cmd)
+    # def GetSwitchStatus(self, hex_address):
+    #     cmd         = [98, 0, 0, 0, 15, 25, 255]
+    #     dec_address = [int(h) for h in hex_address]
+    #     cmd[1:4]    = dec_address        
+    #     self.send(cmd)
         
-        time.sleep(0.5)
-        res = self.read()
-        if res[-1] == 255:
-            print "Switch is ON"
-        elif res[-1] == 0:
-            print "Switch is OFF"
-        else:
-            print "Switch status value: ", res[-1]
-        return res
+    #     time.sleep(0.5)
+    #     res = self.read()
+    #     if res[-1] == 255:
+    #         print "Switch is ON"
+    #     elif res[-1] == 0:
+    #         print "Switch is OFF"
+    #     else:
+    #         print "Switch status value: ", res[-1]
+    #     return res
     
     def SetLevel(self, hex_address, level):
         return self.query(hex_address,17,level)
@@ -272,7 +283,10 @@ if __name__ == '__main__':
     print "================================"
     print "PLM module test function"
     plm = InsteonPLM()
+    plm.log.level = 50
     for device in all_devices:
-        plm.GetSwitchStatus(device)
+        val  = plm.GetSwitchStatus(device)
+        submit([[val(device), val]])
+        print device, val
 
     plm.stop()
