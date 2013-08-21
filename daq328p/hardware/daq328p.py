@@ -74,7 +74,6 @@ class Daq328p(Thread):
         if not out[0]:
             log.info(out[1])
 
-
     def __del__(self):
         log.debug("About to delete the object")
         self.close()

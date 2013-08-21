@@ -1,7 +1,4 @@
 '''
-Created on Sep 29, 2011
-
-@author: Andrzej
 '''
 
 import time
@@ -11,7 +8,6 @@ import binascii
 import os
 
 from logbook import Logger
-
 from datastore import submit
 
 CMDS = {0x50: ['Standard Message Received', 0, 11,],
@@ -115,9 +111,7 @@ class InsteonPLM(object):
         hex_cmd = ''.join(chr(x) for x in cmd)        
         dbg_msg = "Full command: " + str(cmd)
         self.log.debug(dbg_msg)        
-        self.interface.send(hex_cmd)        
-        
-        
+        self.interface.send(hex_cmd)
 
         if get_confirmation:            
             return_data = self.read_response([cmd[1]])
@@ -284,9 +278,11 @@ if __name__ == '__main__':
     print "PLM module test function"
     plm = InsteonPLM()
     plm.log.level = 50
-    for device in all_devices:
-        val  = plm.GetSwitchStatus(device)
-        submit([[val(device), val]])
-        print device, val
+
+    while True:    
+        for device in all_devices:
+            val  = plm.GetSwitchStatus(device)
+            submit([[hex2str(device), val]])            
+        time.sleep(60)
 
     plm.stop()
