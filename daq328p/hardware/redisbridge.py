@@ -54,11 +54,11 @@ class InterfaceTemplate(object):
 ##########################################################################################
 class HwRedisInterface(threading.Thread):
 
-    def __init__(self, interface=InterfaceTemplate(), channel=''):
+    def __init__(self, interface=InterfaceTemplate(), channel='', host='127.0.0.1'):
         threading.Thread.__init__(self)
         self.timeout   = 1
         self.interface = interface
-        self.redis     = redis.Redis()
+        self.redis     = redis.Redis(host=host)
         self.msg_count = 0
         self.busy = 0;
         if channel=='':
@@ -154,7 +154,8 @@ class HwRedisInterface(threading.Thread):
                     is_query = True
                     
             except Exception as E:
-                self.Log.error(E.message)                
+                self.Log.error(E.message)
+                return None
             
             self.Log.debug('    is_query=%d' % is_query)
             
@@ -178,8 +179,8 @@ class HwRedisInterface(threading.Thread):
 ##########################################################################################
 class Client():
 
-    def __init__(self, channel="test"):
-        self.redis = redis.Redis()
+    def __init__(self, channel="test",host='127.0.0.1'):
+        self.redis = redis.Redis(host=host)
         self.channel = channel  
         self.timeout = 1
         self.query_delay = 0.1
