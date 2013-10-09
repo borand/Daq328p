@@ -41,6 +41,8 @@ class InterfaceTemplate(object):
     def send(self, cmd, **kwargs):
         self.Log.debug('send(cmd=%s, kwargs=%s)' %(cmd, str(kwargs)))
         self.last_cmd = cmd
+
+
         return True
 
     def read(self, **kwargs):
@@ -161,12 +163,12 @@ class HwRedisInterface(threading.Thread):
             
             if is_query:
                 out = self.query(cmd,**kwargs)
-                self.redis.publish('res', out[1])
+                self.redis.publish('res', sjson.dumps(out))
                 timeout = msg['timeout']
                 timeout = self.timeout
-                self.redis.set(msg['from'],out[1])
+                self.redis.set(msg['from'],sjson.dumps(out))
                 self.redis.expire(msg['from'], timeout)
-                self.Log.debug('    query(cmd=%s) = %s' % (cmd, out[1]))
+                self.Log.debug('    query(cmd=%s) = %s' % (cmd, str(out)))
             else:
                 self.Log.debug('    send(cmd)')
                 out = self.interface.send(cmd)
