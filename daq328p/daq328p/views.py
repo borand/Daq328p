@@ -7,14 +7,14 @@ from django.template import RequestContext
 from django.shortcuts import render_to_response
 from django.utils.log import getLogger
 
-from hardware_redis_server import Client
+import daq328p.hardware.redisbridge as RB
 
 logger = getLogger("app")
 
 def home(request):
     time_stamp = (datetime.datetime.now())    
-    Daq = Client()
-    res = Daq.query('I')
+    Daq = RB.Client(channel='test',host='192.168.1.127')
+    #res = Daq.query('I')
     msg = str(time_stamp) + '\n' + res[1]
     logger.info(msg)
 #    return HttpResponse(msg)

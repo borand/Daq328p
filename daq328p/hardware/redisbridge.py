@@ -184,7 +184,7 @@ class Client():
     def __init__(self, channel="test",host='127.0.0.1'):
         self.redis = redis.Redis(host=host)
         self.channel = channel  
-        self.timeout = 1
+        self.timeout = 10
         self.query_delay = 0.1
         self.idn = 'Client %d' % id(self)
         self.Log = Logger('Client')
@@ -230,11 +230,16 @@ class Client():
         self.Log.debug('query(cmd=%s, kwargs=%s)' % (cmd, str(kwargs)))
         self.send(cmd, **kwargs)
         
-        to = time.clock()        
-        while time.clock() - to < self.timeout and (not self.redis.exists(self.idn)):
+        to = time.time()
+        while time.time() - to < self.timeout and (not self.redis.exists(self.idn)):
             time.sleep(0.1)
 
-        return self.read()
+        try:
+            return sjson.loads(self.read())
+        except:
+            return [1, self.read()]
+
+
 
 if __name__ == "__main__":
     r = HwRedisInterface(channel='test')
