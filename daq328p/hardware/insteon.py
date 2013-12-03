@@ -8,7 +8,6 @@ import binascii
 import os
 
 from logbook import Logger
-from datastore import submit
 
 CMDS = {0x50: ['Standard Message Received', 0, 11,],
         96  : ['GetImInfo',                 2, 9, ],
@@ -279,10 +278,7 @@ if __name__ == '__main__':
     plm = InsteonPLM()
     plm.log.level = 50
 
-    while True:    
-        for device in all_devices:
-            val  = plm.GetSwitchStatus(device)
-            submit([[hex2str(device), val]])            
-        time.sleep(60)
-
+    for device in all_devices:
+        val  = plm.GetSwitchStatus(device)
+            # submit([[hex2str(device), val]])
     plm.stop()
