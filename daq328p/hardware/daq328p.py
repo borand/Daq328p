@@ -11,7 +11,7 @@ Options:
   -h, --help
   --dev=DEV              [default: /dev/ttyS0]
   --twitter=TWITTER      [default: 1]
-  --submit_to=SUBMIT_TO  [default: sensoredweb.heroku.com]
+  --submit_to=SUBMIT_TO  [default: 192.168.1.133]
 
 """
 
@@ -28,6 +28,7 @@ from datetime import datetime
 from logbook import Logger
 from docopt import docopt
 from requests import get
+from redis import Redis
 
 PARITY_NONE, PARITY_EVEN, PARITY_ODD = 'N', 'E', 'O'
 STOPBITS_ONE, STOPBITS_TWO = (1, 2)
@@ -35,15 +36,16 @@ FIVEBITS, SIXBITS, SEVENBITS, EIGHTBITS = (5,6,7,8)
 TIMEOUT = 3
 
 log = Logger('daq328p')
-log.info("2013.08.16 20:23")
+log.info("2013.12.15 20:23")
 
 class Daq328p(Thread):
     read_all_data = False
     submit_to     = 'sensoredweb.heroku.com'
     submit        = True
+    redis         = Redis()
     re_data       = re.compile(r'(?:<json>)(.*)(?:</json>)', re.DOTALL)
-    json_q   = Queue()
-    read_q   = Queue()
+    json_q        = Queue()
+    read_q        = Queue()
     
     def __init__(self,
                  port = 8,
@@ -120,7 +122,8 @@ class Daq328p(Thread):
             except:
                 serial_error = 1
         else:
-            serial_error = 2        
+            serial_error = 2
+        self.redis.set('daq328p-send',data)
         return serial_error
     
     def read(self, expected_text=''):
@@ -152,7 +155,8 @@ class Daq328p(Thread):
                 serial_error = 1
         else:
             serial_error = 2
-            
+        
+        self.redis.set('daq328p-read',serial_data)
         return (serial_error, serial_data)
     
     def query(self,cmd, **kwargs):
@@ -208,27 +212,37 @@ class Daq328p(Thread):
                 if bytes_in_waiting:
                     new_data = self.serial.read(bytes_in_waiting)            
                     self.buffer = self.buffer + new_data
-                    if self.buffer[-2:] == '\r\n':
+                    
+                    crlf_index = self.buffer.find('\r\n')
+                    if crlf_index > 0:
+                        line = self.buffer[0:crlf_index+2]                        
+                        
                         # Put the unpacked data onto the read queue                    
-                        timestamp = datetime.now()                        
-                        if '</json>' in self.buffer:
-                            log.debug('Found json data in the buffer: %s' % self.buffer)
-                            temp = self.re_data.findall(self.buffer)
+                        timestamp = datetime.now().strftime('%Y-%m-%d-%H:%M:%S')                        
+                        
+                        if '</json>' in line:
+                            log.debug('Found json data in the buffer: %s' % line)
+                            temp = self.re_data.findall(line)
                             try:
                                 final_data = [timestamp, sjson.loads(temp[0])]
-                                self.json_q.put(final_data)
+                                #self.json_q.put(final_data)
+                                self.redis.publish('irq',sjson.dumps(final_data))
                             except Exception as E:
                                 log.error(E.message)
-                                log.error(E.message)
-                                final_data = [timestamp, "json loads error"]   
-                                self.read_q.put([timestamp, self.buffer])
+                                log.error("line %s" % line)
+                                final_data = [timestamp, "json loads error"] 
+                                self.redis.publish('irq',line)
+                                #self.read_q.put([timestamp, line])
                         else:
-                            self.read_q.put([timestamp, self.buffer])
+                            final_data = [timestamp, line]
+                            self.redis.publish('dac328p',sjson.dumps(final_data))
+                            #self.read_q.put([timestamp, line])
 
-                        self.buffer = ''
+                        self.buffer = self.buffer[crlf_index+2:]
 
         except Exception as E:
-            log.error("Exception occured, within the run function: %s" % E.message)            
+            log.error("Exception occured, within the run function: %s" % E.message)
+        
         log.debug('Exiting run() function')
 
 ############################################################################################
@@ -241,7 +255,7 @@ class Daq328p(Thread):
             if self.submit:
                 try:
                     for data in q_data[1]:
-                        url = 'http://%s/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[-1])
+                        url = 'http://%s:8000/sensordata/api/submit/datavalue/now/sn/%s/val/%s' % (self.submit_to, data[0], data[-1])
                         log.debug('submitting to: %s' % url)
                         
                         res = get(url)
